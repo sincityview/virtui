@@ -11,19 +11,18 @@ import (
 )
 
 type App struct {
-	client      *libvirt.Client
-	domains     []libvirt.DomainInfo
-	filter      string
-	filterMode  bool
-	logs        []string
-	logFile     *os.File
-	err         error
-	status      string
-	ready       bool
-	cursor      int
-	confirming  bool
+	client     *libvirt.Client
+	domains    []libvirt.DomainInfo
+	filter     string
+	filterMode bool
+	logs       []string
+	logFile    *os.File
+	err        error
+	status     string
+	ready      bool
+	cursor     int
+	confirming bool
 
-	// Для адаптивности
 	width  int
 	height int
 }
@@ -143,26 +142,27 @@ func (a *App) View() string {
 		return "Подключаемся к libvirt..."
 	}
 
-	// Адаптивная ширина
-	panelWidth := (a.width - 4) / 2 // минус отступы
+	totalWidth := 100
+	if a.width > 0 {
+		totalWidth = a.width - 4
+	}
 
-	header := headerStyle.Width(a.width).Render(
+	leftWidth := (totalWidth * 45) / 100
+	rightWidth := totalWidth - leftWidth - 2
+
+	availableHeight := 12
+	if a.height > 26 {
+		availableHeight = a.height - 26
+	}
+
+	header := headerStyle.Width(totalWidth).Render(
 		titleStyle.Render("virtui — libvirt TUI"),
 	)
-
-	filterLine := ""
-	if a.filterMode {
-		filterLine = "Фильтр: " + a.filter + " (esc — сброс)"
-	} else if a.filter != "" {
-		filterLine = "Фильтр: " + a.filter + " (f — изменить)"
-	} else {
-		filterLine = "Нажми f для фильтра"
-	}
 
 	fDoms := a.filteredDomains()
 	var listItems []string
 	for i, d := range fDoms {
-		line := fmt.Sprintf("%-20s [%s]", d.Name, d.Status)
+		line := fmt.Sprintf("%-22s [%s]", d.Name, d.Status)
 		if i == a.cursor {
 			line = selectedStyle.Render("→ " + line)
 		} else {
@@ -175,38 +175,47 @@ func (a *App) View() string {
 		listContent = "Домены не найдены"
 	}
 
-	domainsPanel := panelStyle.Width(panelWidth).Height(12).Render("ДОМЕНЫ\n" + filterLine + "\n" + listContent)
+	domainsPanel := panelStyle.
+		Width(leftWidth).
+		Height(availableHeight).
+		Render("Domains:\n\n" + listContent)
 
 	info := "Ничего не выбрано"
 	if len(fDoms) > 0 && a.cursor < len(fDoms) {
 		d := fDoms[a.cursor]
 		cpuSec := float64(d.CPU) / 1_000_000_000
-		info = fmt.Sprintf("Имя: %s\nUUID: %s\nСтатус: %s\nOS: %s\n\nVCPU: %d\nПамять: %d / %d MB\nCPU time: %.2f сек",
+		info = fmt.Sprintf("Имя: %s\nUUID: %s\nСтатус: %s\nOS: %s\n\nVCPU: %d\nПамять: %d MB / %d MB\nCPU time: %.2f сек\n",
 			d.Name, d.UUID, d.Status, d.OS, d.VCPUs,
 			d.Memory/1024, d.MaxMemory/1024, cpuSec)
 	}
-	infoPanel := panelStyle.Width(panelWidth).Height(12).Render("ИНФОРМАЦИЯ О ДОМЕНЕ\n" + info)
-
-	// Логи — фиксированные 10 строк
-	logContent := wrapLogLines(a.logs, panelWidth*2-4)
-	if len(a.logs) > 10 {
-		logContent = strings.Join(a.logs[len(a.logs)-10:], "\n")
-	}
-	logsPanel := panelStyle.Width(a.width-4).Height(10).Render("ЛОГИ (последние 10)\n" + logContent)
+	infoPanel := panelStyle.
+		Width(rightWidth).
+		Height(availableHeight).
+		Render("Domain info:\n\n" + info)
 
 	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, domainsPanel, infoPanel)
 
-	view := header + "\n\n" + mainArea + "\n\n" + logsPanel
+	logContent := wrapLogLines(a.logs, totalWidth-4)
+	if len(a.logs) > 10 {
+		logContent = strings.Join(a.logs[len(a.logs)-10:], "\n")
+	}
+	logsPanel := panelStyle.
+		Width(totalWidth).
+		Height(10).
+		Render(logContent)
+
+	footer := footerStyle.Width(totalWidth).Render(
+		"jk - Select | s - Start | p - Shutdown | r - Reboot | c - Console | Shift+D - Destroy | Shift+Q - Quit",
+	)
+
+	view := "\n" + header + "\n\n" + mainArea + "\n\n" + logsPanel + "\n\n" + footer
 
 	if a.status != "" {
 		view += "\n" + a.status
 	}
 	if a.confirming {
-		view += "\n\n" + errorStyle.Render("Уверены? DESTROY (Shift+Y — да, любая клавиша — отмена)")
+		view += "\n\n" + errorStyle.Render("Уверены? DESTROY домена (Shift+Y — да, любая клавиша — отмена)")
 	}
-
-	footer := footerStyle.Width(a.width).Render("↑↓/jk выбор | s Start | p Shutdown | r Reboot | c Console | Shift+D Destroy | f фильтр | Shift+Q выход")
-	view += "\n\n" + footer
 
 	return view
 }

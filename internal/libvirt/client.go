@@ -31,13 +31,12 @@ type DomainInfo struct {
 	Status    string
 	UUID      string
 	OS        string
-	CPU       uint64 // CpuTime в наносекундах
-	Memory    uint64 // KiB
+	CPU       uint64
+	Memory    uint64
 	MaxMemory uint64
 	VCPUs     uint
 }
 
-// ListDomains возвращает расширенную информацию
 func (c *Client) ListDomains() ([]DomainInfo, error) {
 	doms, err := c.conn.ListAllDomains(0)
 	if err != nil {
@@ -84,7 +83,6 @@ func (c *Client) ListDomains() ([]DomainInfo, error) {
 	return domains, nil
 }
 
-// Start, Shutdown, Reboot, Destroy — без изменений
 func (c *Client) Start(name string) error {
 	dom, err := c.conn.LookupDomainByName(name)
 	if err != nil {

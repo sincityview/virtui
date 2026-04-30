@@ -59,7 +59,6 @@ func (a *App) addLog(msg string) {
 	}
 }
 
-// wrapLogLines — перенос длинных строк
 func wrapLogLines(lines []string, maxWidth int) string {
 	var wrapped []string
 	for _, line := range lines {
