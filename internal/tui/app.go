@@ -108,7 +108,7 @@ func (a *App) View() string {
 
 	totalWidth := a.width - 2
 	sideWidth := (totalWidth / 2) - 1
-	panelHeight := a.height - 10
+	panelHeight := a.height - 25
 
 	var listLines []string
 	for i, d := range a.domains {
@@ -135,16 +135,48 @@ func (a *App) View() string {
 	var infoStr string
 	if len(a.domains) > 0 && a.cursor < len(a.domains) {
 		d := a.domains[a.cursor]
-		infoStr = fmt.Sprintf("Name: %s\nStatus: %s\nUUID: %s\nCPUs: %d\nMem: %d MiB", 
-			d.Name, d.Status, d.UUID, d.VCPUs, d.Memory/1024)
+		memStr := fmt.Sprintf("%d MiB", d.Memory/1024)
+
+		disksStr := "None"
+		if len(d.Disks) > 0 {
+			var ds []string
+			for _, disk := range d.Disks {
+				ds = append(ds, "  - "+disk)
+			}
+			disksStr = strings.Join(ds, "\n")
+		}
+
+		ipsStr := "None"
+		if len(d.IPs) > 0 {
+			var is []string
+			for _, ip := range d.IPs {
+				is = append(is, "  - "+ip)
+			}
+			ipsStr = strings.Join(is, "\n")
+		}
+
+		infoStr = fmt.Sprintf("Name: %s\nStatus: %s\nUUID: %s\n\nCPUs: %d\nMem: %s\n\nDisks:\n%s\n\nNetwork:\n%s",
+			d.Name, d.Status, d.UUID, d.VCPUs, memStr, disksStr, ipsStr)
 	}
+
 	rightPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render("Info:\n\n" + infoStr)
 
 	header := headerStyle.Width(totalWidth).Render(" VIRTUI — Libvirt Manager")
 	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-	footer := footerStyle.Width(totalWidth).Render(" jk:Nav | S: Start | P: Stop | E: Edit | C: Console | D:Destroy | Q:Quit")
 
-	res := "\n" + header + "\n" + mainArea + "\n" + footer
+	logContent := wrapLogLines(a.logs, totalWidth-4)
+		if len(a.logs) > 10 {
+			logContent = strings.Join(a.logs[len(a.logs)-10:], "\n")
+		}
+
+	logsPanel := panelStyle.
+		Width(totalWidth).
+		Height(10).
+		Render("Logs:\n\n" + logContent)
+
+	footer := footerStyle.Width(totalWidth).Render(" jk: Nav | S: Start | P: Stop | R: Restart | E: Edit | C: Console | D: Destroy | Q: Quit")
+
+	res := "\n" + header + "\n" + mainArea + "\n" + logsPanel + "\n" + footer
 	if a.confirming {
 		res += "\n" + errorStyle.Render(" !! DESTROY? (Y - да) !!")
 	}

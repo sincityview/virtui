@@ -31,7 +31,6 @@ func (a *App) refresh() tea.Cmd {
 			return errMsg{err}
 		}
 
-		// Сортировка строго по алфавиту
 		sort.Slice(domains, func(i, j int) bool {
 			return domains[i].Name < domains[j].Name
 		})

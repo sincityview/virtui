@@ -3,6 +3,8 @@ package libvirt
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	lv "libvirt.org/go/libvirt"
 )
@@ -31,11 +33,12 @@ type DomainInfo struct {
 	Name      string
 	Status    string
 	UUID      string
-	OS        string
 	CPU       uint64
 	Memory    uint64
 	MaxMemory uint64
 	VCPUs     uint
+	Disks     []string
+	IPs       []string
 }
 
 func (c *Client) ListDomains() ([]DomainInfo, error) {
@@ -48,9 +51,6 @@ func (c *Client) ListDomains() ([]DomainInfo, error) {
 	for _, d := range doms {
 		name, _ := d.GetName()
 		uuid, _ := d.GetUUIDString()
-
-		// OS type
-		osType, _ := d.GetOSType()
 
 		state, _, _ := d.GetState()
 		status := "Unknown"
@@ -69,15 +69,42 @@ func (c *Client) ListDomains() ([]DomainInfo, error) {
 
 		info, _ := d.GetInfo()
 
+		xml, _ := d.GetXMLDesc(0)
+		var disks []string
+		diskMatches := regexp.MustCompile(`<target dev=['"]([^'"]+)['"]`).FindAllStringSubmatch(xml, -1)
+		for _, m := range diskMatches {
+			if len(m) > 1 {
+				dev := m[1]
+				if !strings.HasPrefix(dev, "vnet") {
+					disks = append(disks, dev)
+				}
+			}
+		}
+
+		var ips []string
+		if status == "Running" {
+			ifaces, err := d.ListAllInterfaceAddresses(lv.DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT)
+			if err == nil {
+				for _, iface := range ifaces {
+					for _, addr := range iface.Addrs {
+						if addr.Type == lv.IP_ADDR_TYPE_IPV4 || addr.Type == lv.IP_ADDR_TYPE_IPV6 {
+							ips = append(ips, addr.Addr)
+						}
+					}
+				}
+			}
+		}
+
 		domains = append(domains, DomainInfo{
 			Name:      name,
 			Status:    status,
 			UUID:      uuid,
-			OS:        osType,
 			CPU:       info.CpuTime,
 			Memory:    info.Memory,
 			MaxMemory: info.MaxMem,
 			VCPUs:     info.NrVirtCpu,
+			Disks:     disks,
+			IPs:       ips,
 		})
 		d.Free()
 	}
