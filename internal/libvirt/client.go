@@ -1,3 +1,4 @@
+// virtui/internal/libvirt/client.go
 package libvirt
 
 import (
@@ -117,4 +118,22 @@ func (c *Client) Destroy(name string) error {
 	}
 	defer dom.Free()
 	return dom.Destroy()
+}
+
+func (c *Client) GetXML(name string) (string, error) {
+	dom, err := c.conn.LookupDomainByName(name)
+	if err != nil {
+		return "", err
+	}
+	defer dom.Free()
+	return dom.GetXMLDesc(0)
+}
+
+func (c *Client) DefineXML(xml string) error {
+	dom, err := c.conn.DomainDefineXML(xml)
+	if err != nil {
+		return err
+	}
+	defer dom.Free()
+	return nil
 }

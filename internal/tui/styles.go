@@ -1,3 +1,4 @@
+// virtui/internal/tui/styles.go
 package tui
 
 import "github.com/charmbracelet/lipgloss"

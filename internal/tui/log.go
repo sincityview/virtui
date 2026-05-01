@@ -1,3 +1,4 @@
+// virtui/internal/tui/log.go
 package tui
 
 import (

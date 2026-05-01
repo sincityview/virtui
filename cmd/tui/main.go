@@ -1,3 +1,4 @@
+// virtui/cmd/tui/main.go
 package main
 
 import (
