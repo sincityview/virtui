@@ -19,14 +19,14 @@ State:
 Hotkeys:
 * jk - up / down for machines
 * Shift +
- * s - start unactive machine
- * p - stop active machine
- * r - restart active machine
- * e - edit xml of unactive machine
- * c - connect to active machine
- * k - clone unactive machine with custom name [new uuid, mac]
- * d - destroy and undefine unactive machine
- * q - exit programm
+  * s - start unactive machine
+  * p - stop active machine
+  * r - restart active machine
+  * e - edit xml of unactive machine
+  * c - connect to active machine
+  * k - clone unactive machine with custom name [new uuid, mac]
+  * d - destroy and undefine unactive machine
+  * q - exit programm
 
 <br>
 
