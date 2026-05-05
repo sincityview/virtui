@@ -15,7 +15,11 @@ func main() {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
+	model, err := p.Run()
+	if app, ok := model.(*tui.App); ok {
+		app.Close()
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Ошибка запуска TUI: %v\n", err)
 		os.Exit(1)
 	}

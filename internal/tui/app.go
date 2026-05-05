@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"virtui/internal/config"
 	"virtui/internal/libvirt"
 )
 
@@ -20,24 +22,38 @@ type App struct {
 	ready      bool
 	cursor     int
 	confirming bool
+	perfData   map[string]*PerfBuffer
+	config     *config.Config
 
 	width  int
 	height int
 }
 
 func NewApp() *App {
+	cfg := config.Load()
 	return &App{
-		logs: make([]string, 0, 50),
+		logs:     make([]string, 0, cfg.MaxLogLines),
+		perfData: make(map[string]*PerfBuffer),
+		config:   cfg,
 	}
 }
 
 func (a *App) Init() tea.Cmd {
 	a.initLogFile()
-	return tea.Batch(a.refresh(), a.autoRefresh(), tea.WindowSize())
+	return tea.Batch(a.connect(), a.autoRefresh(), tea.WindowSize())
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case connectMsg:
+		if msg.err != nil {
+			a.err = msg.err
+			return a, nil
+		}
+		a.client = msg.client
+		a.client.IPv4Only = a.config.IPv4Only
+		return a, a.refresh()
+
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
 		return a, nil
@@ -59,11 +75,32 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.cursor >= len(a.domains) && len(a.domains) > 0 {
 			a.cursor = len(a.domains) - 1
 		}
+		now := time.Now()
+		for _, d := range msg.domains {
+			pb, ok := a.perfData[d.Name]
+			if !ok {
+				pb = NewPerfBuffer()
+				a.perfData[d.Name] = pb
+			}
+			pb.AddSample(d.CPU, d.Memory, now, d.VCPUs)
+		}
+		for name := range a.perfData {
+			found := false
+			for _, d := range msg.domains {
+				if d.Name == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				delete(a.perfData, name)
+			}
+		}
 		return a, nil
 
 	case tea.KeyMsg:
 		if msg.String() == "Q" || msg.String() == "ctrl+c" {
-			if a.client != nil { a.client.Close() }
+			a.Close()
 			return a, tea.Quit
 		}
 
@@ -107,8 +144,19 @@ func (a *App) View() string {
 	}
 
 	totalWidth := a.width - 2
-	sideWidth := (totalWidth / 2) - 1
-	panelHeight := a.height - 25
+	wideMode := totalWidth >= 100
+
+	logLines := LogPanelLines
+	if a.height < 35 {
+		logLines = 5
+	}
+	if a.height < 25 {
+		logLines = 3
+	}
+	panelHeight := a.height - 15 - logLines
+	if panelHeight < 5 {
+		panelHeight = 5
+	}
 
 	var listLines []string
 	for i, d := range a.domains {
@@ -127,10 +175,6 @@ func (a *App) View() string {
 		}
 		listLines = append(listLines, line)
 	}
-
-	leftPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render(
-		"Domains:\n\n" + strings.Join(listLines, "\n"),
-	)
 
 	var infoStr string
 	if len(a.domains) > 0 && a.cursor < len(a.domains) {
@@ -157,21 +201,52 @@ func (a *App) View() string {
 
 		infoStr = fmt.Sprintf("Name: %s\nStatus: %s\nUUID: %s\n\nCPUs: %d\nMem: %s\n\nDisks:\n%s\n\nNetwork:\n%s",
 			d.Name, d.Status, d.UUID, d.VCPUs, memStr, disksStr, ipsStr)
+
+		if pb, ok := a.perfData[d.Name]; ok {
+			cpus := pb.CPUs()
+			mems := pb.Memories()
+			if len(cpus) > 0 {
+				spark := renderSparkline(cpus, 12)
+				infoStr += fmt.Sprintf("\n\nCPU: %s  %3.0f%%", spark, cpus[len(cpus)-1])
+			}
+			if len(mems) > 0 {
+				spark := renderSparkline(mems, 12)
+				memCurr := float64(d.Memory) / 1024
+				memMax := float64(d.MaxMemory) / 1024
+				infoStr += fmt.Sprintf("\nMem: %s  %.0f / %.0f MiB", spark, memCurr, memMax)
+			}
+		}
 	}
 
-	rightPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render("Info:\n\n" + infoStr)
+	var mainArea string
+	if wideMode {
+		sideWidth := (totalWidth / 2) - 1
+		leftPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render(
+			"Domains:\n\n" + strings.Join(listLines, "\n"),
+		)
+		rightPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render("Info:\n\n" + infoStr)
+		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+	} else {
+		listHeight := panelHeight * 2 / 3
+		infoHeight := panelHeight - listHeight
+		leftPanel := panelStyle.Width(totalWidth).Height(listHeight).Render(
+			"Domains:\n\n" + strings.Join(listLines, "\n"),
+		)
+		rightPanel := panelStyle.Width(totalWidth).Height(infoHeight).Render("Info:\n\n" + infoStr)
+		mainArea = lipgloss.JoinVertical(lipgloss.Top, leftPanel, rightPanel)
+	}
 
 	header := headerStyle.Width(totalWidth).Render(" VIRTUI — Libvirt Manager")
-	mainArea := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 
-	logContent := wrapLogLines(a.logs, totalWidth-4)
-		if len(a.logs) > 10 {
-			logContent = strings.Join(a.logs[len(a.logs)-10:], "\n")
-		}
+	displayLogs := a.logs
+	if len(displayLogs) > logLines {
+		displayLogs = displayLogs[len(displayLogs)-logLines:]
+	}
+	logContent := wrapLogLines(displayLogs, totalWidth-PanelPadding*2)
 
 	logsPanel := panelStyle.
 		Width(totalWidth).
-		Height(10).
+		Height(logLines).
 		Render("Logs:\n\n" + logContent)
 
 	footer := footerStyle.Width(totalWidth).Render(" jk: Nav | S: Start | P: Stop | R: Restart | E: Edit | C: Console | D: Destroy | Q: Quit")
@@ -181,4 +256,15 @@ func (a *App) View() string {
 		res += "\n" + errorStyle.Render(" !! DESTROY? (Y - да) !!")
 	}
 	return res
+}
+
+func (a *App) Close() {
+	if a.client != nil {
+		a.client.Close()
+		a.client = nil
+	}
+	if a.logFile != nil {
+		a.logFile.Close()
+		a.logFile = nil
+	}
 }

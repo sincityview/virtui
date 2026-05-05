@@ -4,13 +4,15 @@ package libvirt
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	lv "libvirt.org/go/libvirt"
 )
 
 type Client struct {
-	conn *lv.Connect
+	conn     *lv.Connect
+	IPv4Only bool
 }
 
 func NewClient() (*Client, error) {
@@ -71,14 +73,24 @@ func (c *Client) ListDomains() ([]DomainInfo, error) {
 
 		xml, _ := d.GetXMLDesc(0)
 		var disks []string
-		diskMatches := regexp.MustCompile(`<target dev=['"]([^'"]+)['"]`).FindAllStringSubmatch(xml, -1)
-		for _, m := range diskMatches {
-			if len(m) > 1 {
-				dev := m[1]
-				if !strings.HasPrefix(dev, "vnet") {
-					disks = append(disks, dev)
-				}
+		targetRe := regexp.MustCompile(`<target dev=['"]([^'"]+)['"]`)
+		sourceRe := regexp.MustCompile(`<source file=['"]([^'"]+)['"]`)
+		diskParts := strings.Split(xml, "<disk")
+		for _, part := range diskParts[1:] {
+			block := "<disk" + strings.Split(part, "</disk>")[0]
+
+			target := targetRe.FindStringSubmatch(block)
+			if len(target) < 2 {
+				continue
 			}
+			dev := target[1]
+
+			entry := dev
+			source := sourceRe.FindStringSubmatch(block)
+			if len(source) > 1 {
+				entry = fmt.Sprintf("%s [%s]", dev, source[1])
+			}
+			disks = append(disks, entry)
 		}
 
 		var ips []string
@@ -87,13 +99,17 @@ func (c *Client) ListDomains() ([]DomainInfo, error) {
 			if err == nil {
 				for _, iface := range ifaces {
 					for _, addr := range iface.Addrs {
-						if addr.Type == lv.IP_ADDR_TYPE_IPV4 || addr.Type == lv.IP_ADDR_TYPE_IPV6 {
+						if addr.Addr == "127.0.0.1" || addr.Addr == "::1" {
+							continue
+						}
+						if addr.Type == lv.IP_ADDR_TYPE_IPV4 || (!c.IPv4Only && addr.Type == lv.IP_ADDR_TYPE_IPV6) {
 							ips = append(ips, addr.Addr)
 						}
 					}
 				}
 			}
 		}
+		sort.Strings(ips)
 
 		domains = append(domains, DomainInfo{
 			Name:      name,

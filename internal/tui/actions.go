@@ -15,18 +15,29 @@ type refreshMsg struct{}
 type initMsg struct{ domains []libvirt.DomainInfo }
 type errMsg struct{ err error }
 type actionResultMsg string
+type connectMsg struct {
+	client *libvirt.Client
+	err    error
+}
+
+func (a *App) connect() tea.Cmd {
+	return func() tea.Msg {
+		client, err := libvirt.NewClient()
+		if err != nil {
+			return connectMsg{err: err}
+		}
+		return connectMsg{client: client}
+	}
+}
 
 func (a *App) refresh() tea.Cmd {
+	client := a.client
 	return func() tea.Msg {
-		if a.client == nil {
-			client, err := libvirt.NewClient()
-			if err != nil {
-				return errMsg{err}
-			}
-			a.client = client
+		if client == nil {
+			return nil
 		}
 
-		domains, err := a.client.ListDomains()
+		domains, err := client.ListDomains()
 		if err != nil {
 			return errMsg{err}
 		}

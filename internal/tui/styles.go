@@ -3,6 +3,11 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+const (
+	LogPanelLines = 10
+	PanelPadding  = 2
+)
+
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).

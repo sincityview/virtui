@@ -15,13 +15,18 @@ func (a *App) initLogFile() {
 
 	path := filepath.Join(dir, "virtui.log")
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	a.loadExistingLogs(path)
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		a.err = err
 		return
+	}
+	for _, line := range a.logs {
+		_, _ = f.WriteString(line + "\n")
 	}
 	a.logFile = f
 
-	a.loadExistingLogs(path)
 	if len(a.logs) == 0 {
 		a.logs = append(a.logs, "")
 	}
@@ -40,8 +45,8 @@ func (a *App) loadExistingLogs(path string) {
 		allLines = append(allLines, scanner.Text())
 	}
 
-	if len(allLines) > 50 {
-		allLines = allLines[len(allLines)-50:]
+	if len(allLines) > a.config.MaxLogLines {
+		allLines = allLines[len(allLines)-a.config.MaxLogLines:]
 	}
 	a.logs = allLines
 }
@@ -51,8 +56,8 @@ func (a *App) addLog(msg string) {
 	line := timestamp + " | " + msg
 	a.logs = append(a.logs, line)
 
-	if len(a.logs) > 50 {
-		a.logs = a.logs[len(a.logs)-50:]
+	if len(a.logs) > a.config.MaxLogLines {
+		a.logs = a.logs[len(a.logs)-a.config.MaxLogLines:]
 	}
 
 	if a.logFile != nil {
