@@ -157,17 +157,27 @@ func (a *App) View() string {
 	if panelHeight < 5 {
 		panelHeight = 5
 	}
+	compact := panelHeight <= 22
 
 	var listLines []string
+	runningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#50FA7B"))
+	shutoffStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+	pausedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB86C"))
+	otherStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6272A4"))
+
 	for i, d := range a.domains {
-		stStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#50FA7B"))
-		if d.Status != "Running" {
-			stStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555"))
+		st := otherStyle
+		switch d.Status {
+		case "Running":
+			st = runningStyle
+		case "Shutoff":
+			st = shutoffStyle
+		case "Paused":
+			st = pausedStyle
 		}
-		
-		statusPart := stStyle.Render(fmt.Sprintf("[%s]", d.Status))
+		statusPart := st.Render(fmt.Sprintf("[%s]", d.Status))
 		line := fmt.Sprintf("%-20s %s", d.Name, statusPart)
-		
+
 		if i == a.cursor {
 			line = selectedStyle.Render("→ " + line)
 		} else {
@@ -216,6 +226,15 @@ func (a *App) View() string {
 				infoStr += fmt.Sprintf("\nMem: %s  %.0f / %.0f MiB", spark, memCurr, memMax)
 			}
 		}
+	}
+
+	if compact && len(a.domains) > 0 {
+		sideWidth := (totalWidth / 2) - 1
+		leftPanel := panelStyle.Width(sideWidth).Height(a.height).Render(
+			"Domains:\n\n" + strings.Join(listLines, "\n"),
+		)
+		rightPanel := panelStyle.Width(sideWidth).Height(a.height).Render("Info:\n\n" + infoStr)
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	}
 
 	var mainArea string
