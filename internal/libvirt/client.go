@@ -3,6 +3,7 @@ package libvirt
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -179,4 +180,185 @@ func (c *Client) DefineXML(xml string) error {
 	}
 	defer dom.Free()
 	return nil
+}
+
+type diskInfo struct {
+	srcPath string
+	format  string
+}
+
+func (c *Client) RemoveDomain(name string) error {
+	dom, err := c.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("domain %s not found: %w", name, err)
+	}
+	defer dom.Free()
+
+	xml, err := dom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get XML: %w", err)
+	}
+
+	re := regexp.MustCompile(`<source file='([^']+)'`)
+	matches := re.FindAllStringSubmatch(xml, -1)
+	var diskPaths []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			diskPaths = append(diskPaths, m[1])
+		}
+	}
+
+	if err := dom.Destroy(); err != nil {
+		// already shutoff — ignore
+	}
+
+	if err := dom.Undefine(); err != nil {
+		return fmt.Errorf("failed to undefine domain: %w", err)
+	}
+
+	for _, path := range diskPaths {
+		c.removeStorageVol(path)
+	}
+
+	return nil
+}
+
+func (c *Client) CloneDomain(name, cloneName string) error {
+	srcDom, err := c.conn.LookupDomainByName(name)
+	if err != nil {
+		return fmt.Errorf("domain %s not found: %w", name, err)
+	}
+	defer srcDom.Free()
+
+	state, _, _ := srcDom.GetState()
+	if state != lv.DOMAIN_SHUTOFF {
+		return fmt.Errorf("domain %s must be shutoff to clone", name)
+	}
+
+	exists, err := c.DomainExists(cloneName)
+	if err != nil {
+		return fmt.Errorf("failed to check domain existence: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("domain %s already exists", cloneName)
+	}
+
+	xml, err := srcDom.GetXMLDesc(0)
+	if err != nil {
+		return fmt.Errorf("failed to get XML: %w", err)
+	}
+
+	cloneXML, disks, err := prepareCloneXML(xml, name, cloneName)
+	if err != nil {
+		return err
+	}
+
+	var clonedVols []string
+	for _, d := range disks {
+		clonePath := cloneDiskPath(d.srcPath, name, cloneName)
+		if err := c.cloneStorageVol(d.srcPath, clonePath); err != nil {
+			for _, p := range clonedVols {
+				c.removeStorageVol(p)
+			}
+			return fmt.Errorf("failed to clone disk %s: %w", d.srcPath, err)
+		}
+		clonedVols = append(clonedVols, clonePath)
+	}
+
+	if err := c.DefineXML(cloneXML); err != nil {
+		for _, p := range clonedVols {
+			c.removeStorageVol(p)
+		}
+		return fmt.Errorf("failed to define clone domain: %w", err)
+	}
+
+	return nil
+}
+
+func prepareCloneXML(xml, name, cloneName string) (string, []diskInfo, error) {
+	s := xml
+
+	s = regexp.MustCompile(`<name>[^<]+</name>`).ReplaceAllString(s, fmt.Sprintf("<name>%s</name>", cloneName))
+	s = regexp.MustCompile(`\s*<uuid>[^<]+</uuid>`).ReplaceAllString(s, "")
+	s = regexp.MustCompile(`\s*<mac address='[^']*'\s*/>`).ReplaceAllString(s, "")
+
+	re := regexp.MustCompile(`<source file='([^']+)'`)
+	matches := re.FindAllStringSubmatch(s, -1)
+	disks := make([]diskInfo, 0, len(matches))
+	for _, m := range matches {
+		if len(m) > 1 {
+			disks = append(disks, diskInfo{srcPath: m[1]})
+		}
+	}
+
+	for _, d := range disks {
+		clonePath := cloneDiskPath(d.srcPath, name, cloneName)
+		s = strings.ReplaceAll(s, d.srcPath, clonePath)
+	}
+
+	return s, disks, nil
+}
+
+func cloneDiskPath(srcPath, name, cloneName string) string {
+	dir, file := filepath.Split(srcPath)
+	newFile := strings.Replace(file, name, cloneName, 1)
+	if newFile == file {
+		ext := filepath.Ext(file)
+		base := file[:len(file)-len(ext)]
+		newFile = base + "-" + cloneName + ext
+	}
+	return filepath.Join(dir, newFile)
+}
+
+func (c *Client) cloneStorageVol(srcPath, clonePath string) error {
+	cloneFileName := filepath.Base(clonePath)
+
+	srcVol, err := c.conn.LookupStorageVolByPath(srcPath)
+	if err != nil {
+		return fmt.Errorf("source volume not found: %w", err)
+	}
+	defer srcVol.Free()
+
+	srcXML, err := srcVol.GetXMLDesc(0)
+	if err == nil {
+		formatMatch := regexp.MustCompile(`<format type='([^']+)'`).FindStringSubmatch(srcXML)
+		if len(formatMatch) > 1 {
+			return c.cloneVolWithFormat(srcVol, cloneFileName, formatMatch[1])
+		}
+	}
+
+	return c.cloneVolWithFormat(srcVol, cloneFileName, "raw")
+}
+
+func (c *Client) cloneVolWithFormat(srcVol *lv.StorageVol, name, format string) error {
+	pool, err := srcVol.LookupPoolByVolume()
+	if err != nil {
+		return fmt.Errorf("failed to find pool for volume: %w", err)
+	}
+	defer pool.Free()
+
+	volXML := fmt.Sprintf(`<volume><name>%s</name><target><format type='%s'/></target></volume>`, name, format)
+	_, err = pool.StorageVolCreateXMLFrom(volXML, srcVol, 0)
+	return err
+}
+
+func (c *Client) removeStorageVol(path string) {
+	vol, err := c.conn.LookupStorageVolByPath(path)
+	if err != nil {
+		return
+	}
+	defer vol.Free()
+	vol.Delete(lv.STORAGE_VOL_DELETE_NORMAL)
+}
+
+func (c *Client) DomainExists(name string) (bool, error) {
+	dom, err := c.conn.LookupDomainByName(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return false, nil
+		}
+		return false, err
+	}
+	dom.Free()
+	return true, nil
 }

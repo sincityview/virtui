@@ -22,6 +22,9 @@ type App struct {
 	ready      bool
 	cursor     int
 	confirming bool
+	cloneMode  bool
+	cloneName  string
+	deleteMode bool
 	perfData   map[string]*PerfBuffer
 	config     *config.Config
 
@@ -104,6 +107,44 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 
+		if a.cloneMode {
+			switch msg.String() {
+			case "enter":
+				if a.cloneName != "" {
+					return a, a.doClone(a.cloneName)
+				}
+			case "esc":
+				a.cloneMode = false
+				a.cloneName = ""
+			case "backspace", "ctrl+h":
+				if len(a.cloneName) > 0 {
+					a.cloneName = a.cloneName[:len(a.cloneName)-1]
+				}
+			default:
+				if len(msg.Runes) == 1 {
+					r := msg.Runes[0]
+					if r >= 32 && r <= 126 {
+						a.cloneName += string(r)
+					}
+				}
+			}
+			return a, nil
+		}
+
+		if a.deleteMode {
+			switch msg.String() {
+			case "enter":
+				return a, a.doDelete()
+			case "esc":
+				a.deleteMode = false
+			case "y", "Y":
+				return a, a.doDelete()
+			case "n", "N":
+				a.deleteMode = false
+			}
+			return a, nil
+		}
+
 		if a.confirming {
 			if msg.String() == "Y" {
 				a.confirming = false
@@ -127,9 +168,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "C":
 			return a, a.connectToConsole()
 		case "E":
-    		return a, a.editDomainXML()
+    			return a, a.editDomainXML()
 		case "D":
-			if len(a.domains) > 0 { a.confirming = true }
+			if len(a.domains) > 0 && a.cursor < len(a.domains) {
+				if a.domains[a.cursor].Status == "Shutoff" {
+					a.deleteMode = true
+				} else {
+					a.confirming = true
+				}
+			}
+		case "K":
+			if len(a.domains) > 0 && a.cursor < len(a.domains) && a.domains[a.cursor].Status == "Shutoff" {
+				a.cloneMode = true
+				a.cloneName = a.domains[a.cursor].Name + "-clone"
+			}
 		}
 	}
 	return a, nil
@@ -228,12 +280,27 @@ func (a *App) View() string {
 		}
 	}
 
+	rightContent := infoStr
+	if a.cloneMode {
+		srcName := ""
+		if a.cursor < len(a.domains) {
+			srcName = a.domains[a.cursor].Name
+		}
+		rightContent = fmt.Sprintf("Clone: %s\n\nNew name:\n\n  %s█\n\nEnter — clone | Esc — cancel", srcName, a.cloneName)
+	} else if a.deleteMode {
+		srcName := ""
+		if a.cursor < len(a.domains) {
+			srcName = a.domains[a.cursor].Name
+		}
+		rightContent = fmt.Sprintf("Delete VM: %s\n\nThis will remove all disks.\n\nY — delete | N/Esc — cancel", srcName)
+	}
+
 	if compact && len(a.domains) > 0 {
 		sideWidth := (totalWidth / 2) - 1
 		leftPanel := panelStyle.Width(sideWidth).Height(a.height).Render(
 			"Domains:\n\n" + strings.Join(listLines, "\n"),
 		)
-		rightPanel := panelStyle.Width(sideWidth).Height(a.height).Render("Info:\n\n" + infoStr)
+		rightPanel := panelStyle.Width(sideWidth).Height(a.height).Render("Info:\n\n" + rightContent)
 		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	}
 
@@ -243,7 +310,7 @@ func (a *App) View() string {
 		leftPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render(
 			"Domains:\n\n" + strings.Join(listLines, "\n"),
 		)
-		rightPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render("Info:\n\n" + infoStr)
+		rightPanel := panelStyle.Width(sideWidth).Height(panelHeight).Render("Info:\n\n" + rightContent)
 		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 	} else {
 		listHeight := panelHeight * 2 / 3
@@ -251,11 +318,11 @@ func (a *App) View() string {
 		leftPanel := panelStyle.Width(totalWidth).Height(listHeight).Render(
 			"Domains:\n\n" + strings.Join(listLines, "\n"),
 		)
-		rightPanel := panelStyle.Width(totalWidth).Height(infoHeight).Render("Info:\n\n" + infoStr)
+		rightPanel := panelStyle.Width(totalWidth).Height(infoHeight).Render("Info:\n\n" + rightContent)
 		mainArea = lipgloss.JoinVertical(lipgloss.Top, leftPanel, rightPanel)
 	}
 
-	header := headerStyle.Width(totalWidth).Render(" VIRTUI — Libvirt Manager")
+	header := headerStyle.Width(totalWidth).Render(" VIRTUI — Libvirt Connector")
 
 	displayLogs := a.logs
 	if len(displayLogs) > logLines {
@@ -268,7 +335,7 @@ func (a *App) View() string {
 		Height(logLines).
 		Render("Logs:\n\n" + logContent)
 
-	footer := footerStyle.Width(totalWidth).Render(" jk: Nav | S: Start | P: Stop | R: Restart | E: Edit | C: Console | D: Destroy | Q: Quit")
+	footer := footerStyle.Width(totalWidth).Render(" jk: Nav | S: Start | P: Stop | R: Restart | E: Edit | C: Console | K: Clone | D: Destroy | Q: Quit")
 
 	res := "\n" + header + "\n" + mainArea + "\n" + logsPanel + "\n" + footer
 	if a.confirming {

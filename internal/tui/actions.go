@@ -86,6 +86,37 @@ func (a *App) connectToConsole() tea.Cmd {
 	})
 }
 
+func (a *App) doDelete() tea.Cmd {
+	if len(a.domains) == 0 || a.cursor >= len(a.domains) {
+		return nil
+	}
+	name := a.domains[a.cursor].Name
+	a.deleteMode = false
+
+	return func() tea.Msg {
+		if err := a.client.RemoveDomain(name); err != nil {
+			return actionResultMsg(fmt.Sprintf("✗ Delete %s: %v", name, err))
+		}
+		return actionResultMsg(fmt.Sprintf("✓ Deleted %s", name))
+	}
+}
+
+func (a *App) doClone(cloneName string) tea.Cmd {
+	if len(a.domains) == 0 || a.cursor >= len(a.domains) {
+		return nil
+	}
+	name := a.domains[a.cursor].Name
+	a.cloneMode = false
+	a.cloneName = ""
+
+	return func() tea.Msg {
+		if err := a.client.CloneDomain(name, cloneName); err != nil {
+			return actionResultMsg(fmt.Sprintf("✗ Clone %s → %s: %v", name, cloneName, err))
+		}
+		return actionResultMsg(fmt.Sprintf("✓ Clone %s → %s", name, cloneName))
+	}
+}
+
 func (a *App) editDomainXML() tea.Cmd {
 	if len(a.domains) == 0 || a.cursor >= len(a.domains) {
 		return nil
