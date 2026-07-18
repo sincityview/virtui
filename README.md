@@ -8,10 +8,12 @@ Install:
 * go mod tidy
 * go build -o virtui cmd/tui/main.go
 * sudo cp ./virtui /usr/local/bin/vtui
-* sudo vtui
+* echo "uri = \"qemu:///system\"" >> ~/.config/libvirt/libvirt.conf
+* sudo usermod -aG libvirt,libvirt-qemu,kvm $USER
+* vtui
 <br>
 
-State:
+TODO:
 * ⊂(◉‿◉)つ
 * сделать языковый пакет, но кому оно надо..
 
@@ -39,8 +41,9 @@ config  virtui.log
 $ cat ~/.local/virtui/config 
 ```json
 {
-  "max_log_lines": 50,
-  "ipv4_only": true
+  "max_log_lines": 20,
+  "ipv4_only": true,
+  "libvirt_dir": "/var/lib/libvirt/"
 }
 ```
 

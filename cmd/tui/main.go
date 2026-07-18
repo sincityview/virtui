@@ -6,11 +6,14 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"virtui/internal/config"
 	"virtui/internal/tui"
 )
 
 func main() {
-	p := tea.NewProgram(tui.NewApp(),
+	cfg := config.Load()
+
+	p := tea.NewProgram(tui.NewApp(cfg),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

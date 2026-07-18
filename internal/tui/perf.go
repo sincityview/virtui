@@ -1,3 +1,4 @@
+// virtui/internal/tui/perf.go
 package tui
 
 import (

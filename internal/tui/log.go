@@ -45,8 +45,8 @@ func (a *App) loadExistingLogs(path string) {
 		allLines = append(allLines, scanner.Text())
 	}
 
-	if len(allLines) > a.config.MaxLogLines {
-		allLines = allLines[len(allLines)-a.config.MaxLogLines:]
+	if len(allLines) > a.cfg.MaxLogLines {
+		allLines = allLines[len(allLines)-a.cfg.MaxLogLines:]
 	}
 	a.logs = allLines
 }
@@ -56,8 +56,8 @@ func (a *App) addLog(msg string) {
 	line := timestamp + " | " + msg
 	a.logs = append(a.logs, line)
 
-	if len(a.logs) > a.config.MaxLogLines {
-		a.logs = a.logs[len(a.logs)-a.config.MaxLogLines:]
+	if len(a.logs) > a.cfg.MaxLogLines {
+		a.logs = a.logs[len(a.logs)-a.cfg.MaxLogLines:]
 	}
 
 	if a.logFile != nil {

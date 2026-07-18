@@ -3,6 +3,7 @@ package libvirt
 
 import (
 	"fmt"
+	"virtui/internal/config"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -12,16 +13,21 @@ import (
 )
 
 type Client struct {
-	conn     *lv.Connect
-	IPv4Only bool
+	conn       *lv.Connect
+	IPv4Only   bool
+	LibvirtDir string
 }
 
-func NewClient() (*Client, error) {
+func NewClient(cfg *config.Config) (*Client, error) {
 	conn, err := lv.NewConnect("qemu:///system")
 	if err != nil {
-		return nil, fmt.Errorf("не удалось подключиться к libvirt: %w", err)
+		return nil, fmt.Errorf("cant connect to libvirt: %w", err)
 	}
-	return &Client{conn: conn}, nil
+	return &Client{
+		conn:       conn, 
+		IPv4Only:   cfg.IPv4Only,
+		LibvirtDir: cfg.LibvirtDir,
+	}, nil
 }
 
 func (c *Client) Close() error {
@@ -199,12 +205,13 @@ func (c *Client) RemoveDomain(name string) error {
 		return fmt.Errorf("failed to get XML: %w", err)
 	}
 
-	re := regexp.MustCompile(`<source file='([^']+)'`)
+	re := regexp.MustCompile(`<source file=['"]([^'"]+)['"]`)
 	matches := re.FindAllStringSubmatch(xml, -1)
 	var diskPaths []string
 	for _, m := range matches {
 		if len(m) > 1 {
-			diskPaths = append(diskPaths, m[1])
+			path := strings.ReplaceAll(m[1], "/var/lib/libvirt/", c.LibvirtDir)
+			diskPaths = append(diskPaths, path)
 		}
 	}
 
@@ -248,7 +255,7 @@ func (c *Client) CloneDomain(name, cloneName string) error {
 		return fmt.Errorf("failed to get XML: %w", err)
 	}
 
-	cloneXML, disks, err := prepareCloneXML(xml, name, cloneName)
+	cloneXML, disks, err := c.prepareCloneXML(xml, name, cloneName)
 	if err != nil {
 		return err
 	}
@@ -275,14 +282,16 @@ func (c *Client) CloneDomain(name, cloneName string) error {
 	return nil
 }
 
-func prepareCloneXML(xml, name, cloneName string) (string, []diskInfo, error) {
+func (c *Client) prepareCloneXML(xml, name, cloneName string) (string, []diskInfo, error) {
 	s := xml
+
+	s = strings.ReplaceAll(s, "/var/lib/libvirt/", c.LibvirtDir)
 
 	s = regexp.MustCompile(`<name>[^<]+</name>`).ReplaceAllString(s, fmt.Sprintf("<name>%s</name>", cloneName))
 	s = regexp.MustCompile(`\s*<uuid>[^<]+</uuid>`).ReplaceAllString(s, "")
 	s = regexp.MustCompile(`\s*<mac address='[^']*'\s*/>`).ReplaceAllString(s, "")
 
-	re := regexp.MustCompile(`<source file='([^']+)'`)
+	re := regexp.MustCompile(`<source file=['"]([^'"]+)['"]`)
 	matches := re.FindAllStringSubmatch(s, -1)
 	disks := make([]diskInfo, 0, len(matches))
 	for _, m := range matches {
@@ -311,24 +320,29 @@ func cloneDiskPath(srcPath, name, cloneName string) string {
 }
 
 func (c *Client) cloneStorageVol(srcPath, clonePath string) error {
+	srcPath = strings.ReplaceAll(srcPath, "/var/lib/libvirt/", c.LibvirtDir)
+	clonePath = strings.ReplaceAll(clonePath, "/var/lib/libvirt/", c.LibvirtDir)
+
 	cloneFileName := filepath.Base(clonePath)
 
 	srcVol, err := c.conn.LookupStorageVolByPath(srcPath)
 	if err != nil {
-		return fmt.Errorf("source volume not found: %w", err)
+		return fmt.Errorf("source volume not found at '%s': %w", srcPath, err)
 	}
 	defer srcVol.Free()
 
 	srcXML, err := srcVol.GetXMLDesc(0)
+	var format string = "raw"
 	if err == nil {
 		formatMatch := regexp.MustCompile(`<format type='([^']+)'`).FindStringSubmatch(srcXML)
 		if len(formatMatch) > 1 {
-			return c.cloneVolWithFormat(srcVol, cloneFileName, formatMatch[1])
+			format = formatMatch[1]
 		}
 	}
 
-	return c.cloneVolWithFormat(srcVol, cloneFileName, "raw")
+	return c.cloneVolWithFormat(srcVol, cloneFileName, format)
 }
+
 
 func (c *Client) cloneVolWithFormat(srcVol *lv.StorageVol, name, format string) error {
 	pool, err := srcVol.LookupPoolByVolume()
@@ -343,6 +357,8 @@ func (c *Client) cloneVolWithFormat(srcVol *lv.StorageVol, name, format string) 
 }
 
 func (c *Client) removeStorageVol(path string) {
+	path = strings.ReplaceAll(path, "/var/lib/libvirt/", c.LibvirtDir)
+
 	vol, err := c.conn.LookupStorageVolByPath(path)
 	if err != nil {
 		return

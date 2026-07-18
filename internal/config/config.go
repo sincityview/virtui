@@ -1,3 +1,4 @@
+// virtui/internal/config/config.go
 package config
 
 import (
@@ -7,14 +8,16 @@ import (
 )
 
 type Config struct {
-	MaxLogLines int  `json:"max_log_lines"`
-	IPv4Only    bool `json:"ipv4_only"`
+	MaxLogLines int    `json:"max_log_lines"`
+	IPv4Only    bool   `json:"ipv4_only"`
+	LibvirtDir  string `json:"libvirt_dir"`
 }
 
 func Default() *Config {
 	return &Config{
 		MaxLogLines: 50,
 		IPv4Only:    false,
+		LibvirtDir:  "/var/lib/libvirt/",
 	}
 }
 
@@ -25,13 +28,14 @@ func Load() *Config {
 	path := filepath.Join(dir, "config")
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return cfg
+	if err == nil {
+		_ = json.Unmarshal(data, cfg)
 	}
 
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return cfg
+	if _, err := os.Stat("/home/libvirt/images"); err == nil {
+		cfg.LibvirtDir = "/home/libvirt/"
 	}
 
 	return cfg
 }
+

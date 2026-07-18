@@ -26,18 +26,17 @@ type App struct {
 	cloneName  string
 	deleteMode bool
 	perfData   map[string]*PerfBuffer
-	config     *config.Config
+	cfg        *config.Config
 
 	width  int
 	height int
 }
 
-func NewApp() *App {
-	cfg := config.Load()
+func NewApp(cfg *config.Config) *App {
 	return &App{
 		logs:     make([]string, 0, cfg.MaxLogLines),
 		perfData: make(map[string]*PerfBuffer),
-		config:   cfg,
+		cfg:      cfg,
 	}
 }
 
@@ -54,7 +53,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.client = msg.client
-		a.client.IPv4Only = a.config.IPv4Only
+		a.client.IPv4Only = a.cfg.IPv4Only
 		return a, a.refresh()
 
 	case tea.WindowSizeMsg:

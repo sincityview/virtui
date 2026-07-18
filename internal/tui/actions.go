@@ -1,3 +1,4 @@
+// virtui/internal/tui/actions.go
 package tui
 
 import (
@@ -22,7 +23,7 @@ type connectMsg struct {
 
 func (a *App) connect() tea.Cmd {
 	return func() tea.Msg {
-		client, err := libvirt.NewClient()
+		client, err := libvirt.NewClient(a.cfg)
 		if err != nil {
 			return connectMsg{err: err}
 		}
