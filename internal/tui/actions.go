@@ -77,6 +77,7 @@ func (a *App) connectToConsole() tea.Cmd {
 	}
 
 	name := a.domains[a.cursor].Name
+	
 	c := exec.Command("virsh", "console", name)
 
 	return tea.ExecProcess(c, func(err error) tea.Msg {

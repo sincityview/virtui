@@ -9,7 +9,8 @@ Install:
 * go build -o virtui cmd/tui/main.go
 * sudo cp ./virtui /usr/local/bin/vtui
 * echo "uri = \"qemu:///system\"" >> ~/.config/libvirt/libvirt.conf
-* sudo usermod -aG libvirt,libvirt-qemu,kvm $SUDO_USER
+* sudo usermod -aG libvirt,libvirt-qemu,kvm <username>
+* echo 'export LIBVIRT_DEFAULT_URI="qemu:///system"' >> ~/.bashrc && source ~/.bashrc
 * vtui
 <br>
 
