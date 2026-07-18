@@ -9,7 +9,7 @@ Install:
 * go build -o virtui cmd/tui/main.go
 * sudo cp ./virtui /usr/local/bin/vtui
 * echo "uri = \"qemu:///system\"" >> ~/.config/libvirt/libvirt.conf
-* sudo usermod -aG libvirt,libvirt-qemu,kvm $USER
+* sudo usermod -aG libvirt,libvirt-qemu,kvm $SUDO_USER
 * vtui
 <br>
 
