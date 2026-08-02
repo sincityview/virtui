@@ -25,6 +25,9 @@ jobs:
       - name: Install libvirt-dev
         run: sudo apt-get update && sudo apt-get install -y libvirt-dev pkg-config gcc
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Build
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
