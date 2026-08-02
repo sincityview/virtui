@@ -32,6 +32,11 @@ func Load() *Config {
 	data, err := os.ReadFile(path)
 	if err == nil {
 		_ = json.Unmarshal(data, cfg)
+	} else {
+		_ = os.MkdirAll(dir, 0755)
+		if out, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+			_ = os.WriteFile(path, out, 0644)
+		}
 	}
 
 	return cfg
