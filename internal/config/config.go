@@ -11,6 +11,7 @@ type Config struct {
 	MaxLogLines int    `json:"max_log_lines"`
 	IPv4Only    bool   `json:"ipv4_only"`
 	LibvirtDir  string `json:"libvirt_dir"`
+	URI         string `json:"-"`
 }
 
 func Default() *Config {
@@ -18,6 +19,7 @@ func Default() *Config {
 		MaxLogLines: 50,
 		IPv4Only:    false,
 		LibvirtDir:  "/var/lib/libvirt/",
+		URI:         "qemu:///system",
 	}
 }
 
@@ -30,10 +32,6 @@ func Load() *Config {
 	data, err := os.ReadFile(path)
 	if err == nil {
 		_ = json.Unmarshal(data, cfg)
-	}
-
-	if _, err := os.Stat("/home/libvirt/images"); err == nil {
-		cfg.LibvirtDir = "/home/libvirt/"
 	}
 
 	return cfg

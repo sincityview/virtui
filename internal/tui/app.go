@@ -188,10 +188,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (a *App) View() string {
 	if a.err != nil {
-		return errorStyle.Render(fmt.Sprintf("Ошибка: %v\nQ - Выход", a.err))
+		return errorStyle.Render(fmt.Sprintf("Error: %v\nQ - Quit", a.err))
 	}
 	if !a.ready {
-		return " Подключение к libvirt..."
+		return " Connecting to libvirt..."
 	}
 
 	totalWidth := a.width - 2
@@ -338,7 +338,7 @@ func (a *App) View() string {
 
 	res := "\n" + header + "\n" + mainArea + "\n" + logsPanel + "\n" + footer
 	if a.confirming {
-		res += "\n" + errorStyle.Render(" !! DESTROY? (Y - да) !!")
+		res += "\n" + errorStyle.Render(" !! DESTROY? (Y - yes) !!")
 	}
 	return res
 }

@@ -68,16 +68,17 @@ func (a *App) addLog(msg string) {
 func wrapLogLines(lines []string, maxWidth int) string {
 	var wrapped []string
 	for _, line := range lines {
-		if len(line) <= maxWidth {
+		runes := []rune(line)
+		if len(runes) <= maxWidth {
 			wrapped = append(wrapped, line)
 			continue
 		}
-		for len(line) > maxWidth {
-			wrapped = append(wrapped, line[:maxWidth])
-			line = line[maxWidth:]
+		for len(runes) > maxWidth {
+			wrapped = append(wrapped, string(runes[:maxWidth]))
+			runes = runes[maxWidth:]
 		}
-		if len(line) > 0 {
-			wrapped = append(wrapped, line)
+		if len(runes) > 0 {
+			wrapped = append(wrapped, string(runes))
 		}
 	}
 	return strings.Join(wrapped, "\n")
