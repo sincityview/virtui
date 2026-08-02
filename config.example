@@ -1,5 +1,0 @@
-{
-  "max_log_lines": 20,
-  "ipv4_only": false,
-  "libvirt_dir": "/var/lib/libvirt/"
-}
