@@ -19,10 +19,20 @@ var (
 			BorderForeground(lipgloss.Color("#6272A4")).
 			Padding(0, 1)
 
+	headerFlat = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#BD93F9")).
+			Padding(0, 1)
+
 	panelStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#6272A4")).
 			Padding(1, 2)
+
+	panelSlim = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#6272A4")).
+			Padding(0, 1)
 
 	selectedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FF5555")).
@@ -39,5 +49,9 @@ var (
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#6272A4")).
 			Foreground(lipgloss.Color("#BD93F9")).
+			Padding(0, 1)
+
+	footerFlat = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#6272A4")).
 			Padding(0, 1)
 )
