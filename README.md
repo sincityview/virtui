@@ -3,20 +3,26 @@
 ------
 
 Install:
-* sudo apt install -y libvirt-dev pkg-config
-* go mod init virtui
+* sudo apt install -y libvirt-dev pkg-config gcc
 * go mod tidy
 * go build -o virtui cmd/tui/main.go
 * sudo cp ./virtui /usr/local/bin/vtui
-* echo "uri = \"qemu:///system\"" >> ~/.config/libvirt/libvirt.conf
-* sudo usermod -aG libvirt,libvirt-qemu,kvm <username>
-* echo 'export LIBVIRT_DEFAULT_URI="qemu:///system"' >> ~/.bashrc && source ~/.bashrc
+* sudo usermod -aG libvirt,libvirt-qemu,kvm $USER
+* echo 'export LIBVIRT_DEFAULT_URI="qemu:///system"' >> ~/.bashrc
+* relogin (or newgrp libvirt)
 * vtui
-<br>
 
-TODO:
-* ⊂(◉‿◉)つ
-* сделать языковый пакет, но кому оно надо..
+Config is created automatically on first run at ~/.local/virtui/config:
+
+```json
+{
+  "max_log_lines": 50,
+  "ipv4_only": false,
+  "libvirt_dir": "/var/lib/libvirt/"
+}
+```
+
+Modify as needed, then restart vtui.
 
 <br>
 
@@ -31,22 +37,6 @@ Hotkeys:
   * k - clone unactive machine with custom name [new uuid, mac]
   * d - destroy and undefine unactive machine
   * q - exit programm
-
-<br>
-
-$ ls ~/.local/virtui/
-```bash
-config  virtui.log
-```
-
-$ cat ~/.local/virtui/config 
-```json
-{
-  "max_log_lines": 20,
-  "ipv4_only": true,
-  "libvirt_dir": "/var/lib/libvirt/"
-}
-```
 
 <br>
 
